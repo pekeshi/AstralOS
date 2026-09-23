@@ -20,8 +20,97 @@ start:
     mov esi, kernel_started
     call serial_write_string
 
+    ; Clear VGA text memory and display the startup message on screen.
+    call vga_clear
+    call vga_write_titlebar
+    mov edi, 0xB80A0
+    mov esi, kernel_started
+    call vga_write_string
+
+    ; Put the shell prompt on the third row, ready for future keyboard input.
+    mov edi, 0xB8140
+    mov esi, prompt_text
+    call vga_write_string
+
     ; Stay here so the VM does not immediately reset of its own accord.
     jmp $
+
+vga_clear:
+    ; VGA text memory starts at 0xB8000. Each cell has a character byte
+    ; followed by a color byte. 0x0720 means a gray space on black.
+    push eax
+    push ecx
+    push edi
+
+    mov edi, 0xB8000
+    mov ax, 0x0720
+    mov ecx, 80 * 25
+    rep stosw
+
+    pop edi
+    pop ecx
+    pop eax
+    ret
+
+vga_write_titlebar:
+    ; Paint the first row green with black characters, then write the title.
+    push eax
+    push ecx
+    push edi
+    push esi
+
+    mov edi, 0xB8000
+    mov ax, 0x2000
+    mov ecx, 80
+    rep stosw
+
+    ; Start after half of the unused cells so the complete title is centered.
+    mov edi, 0xB8000 + ((80 - titlebar_length) / 2) * 2
+    mov esi, titlebar_text
+
+.next_character:
+    lodsb
+    test al, al
+    jz .done
+
+    ; 0x20 means black text on a green background.
+    mov ah, 0x20
+    stosw
+    jmp .next_character
+
+.done:
+    pop esi
+    pop edi
+    pop ecx
+    pop eax
+    ret
+
+vga_write_string:
+    ; Write the null-terminated string at ESI to the VGA address in EDI.
+    push eax
+    push esi
+    push edi
+
+.next_character:
+    lodsb
+    test al, al
+    jz .done
+
+    ; Keep this first writer simple: skip line-ending control characters.
+    cmp al, 0x0D
+    je .next_character
+    cmp al, 0x0A
+    je .next_character
+
+    mov ah, 0x07
+    stosw
+    jmp .next_character
+
+.done:
+    pop edi
+    pop esi
+    pop eax
+    ret
 
 serial_init:
     ; Configure COM1 at port 0x3F8 for 8N1.
@@ -80,4 +169,7 @@ serial_write_string:
     pop esi
     ret
 
+titlebar_text db 'AstralOS - 0.1.0 - pekeshi', 0
+titlebar_length equ $ - titlebar_text - 1
 kernel_started db 'Kernel entered protected mode', 0x0D, 0x0A, 0
+prompt_text db '> ', 0
