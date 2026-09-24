@@ -36,7 +36,7 @@ build/          Generated binaries and disk image
 
 - NASM
 - GNU Make
-- Python 3
+- Python 3 with `pyfatfs` dependencies from `requirements.txt`
 - WSL with GNU binutils (`ld`)
 - QEMU with `qemu-system-i386`
 
@@ -54,7 +54,7 @@ The build creates:
 - `build/boot.bin` - the 512-byte boot sector
 - `build/kernel.bin` - the raw kernel binary
 - `build/astralos.img` - a 1.44 MiB BIOS-bootable disk image
-- `build/astralos-uefi.img` - a 16 MiB FAT16 UEFI disk image
+- `build/astralos-uefi.img` - a 64 MiB FAT32 UEFI disk image
 - `build/BOOTX64.EFI` - the x86-64 UEFI boot application
 
 To build the UEFI image:

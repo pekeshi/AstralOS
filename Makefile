@@ -34,7 +34,7 @@ $(UEFI_KERNEL): src/kernel.asm src/vga.asm src/serial.asm src/keyboard.asm src/a
 	@if not exist "$(BUILD)" mkdir "$(BUILD)"
 	$(NASM) -f bin -dKERNEL_ORG=0x100000 -o $@ $<
 
-$(UEFI_OBJ): src/uefi.asm
+$(UEFI_OBJ): src/uefi.asm $(UEFI_KERNEL)
 	@if not exist "$(BUILD)" mkdir "$(BUILD)"
 	$(NASM) -f win64 -o $@ $<
 
@@ -43,7 +43,7 @@ $(UEFI_APP): $(UEFI_OBJ)
 
 uefi: $(UEFI_IMAGE)
 
-$(UEFI_IMAGE): $(UEFI_APP) $(UEFI_KERNEL) tools/make_uefi_image.py
+$(UEFI_IMAGE): $(UEFI_APP) $(UEFI_KERNEL) tools/make_uefi_image.py requirements.txt
 	python tools/make_uefi_image.py "$@" "$(UEFI_APP)" "$(UEFI_KERNEL)"
 
 $(IMAGE): $(BOOT) $(KERNEL)
@@ -60,7 +60,7 @@ run-test: $(IMAGE)
 	$(QEMU) -display none -serial stdio -fda $<
 
 run-uefi: $(UEFI_IMAGE)
-	qemu-system-x86_64 -drive format=raw,file=$< -bios "C:/msys64/mingw64/share/qemu/edk2-x86_64-code.fd" -serial stdio
+	qemu-system-x86_64 -drive if=pflash,format=raw,readonly=on,file="C:/msys64/mingw64/share/qemu/edk2-x86_64-code.fd" -drive if=none,id=astralos-usb,format=raw,file=$< -device qemu-xhci,id=xhci -device usb-storage,bus=xhci.0,drive=astralos-usb -serial stdio
 
 clean:
 	@if exist "$(BUILD)" rmdir /s /q "$(BUILD)"
