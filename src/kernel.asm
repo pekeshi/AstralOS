@@ -24,10 +24,6 @@ start:
     call vga_clear
     call vga_write_titlebar
     mov edi, 0xB80A0
-    mov esi, welcome_message
-    call vga_write_string
-
-    mov edi, 0xB8140
     mov esi, prompt_text
     call vga_write_string
 
@@ -41,6 +37,7 @@ start:
 %include "src/vga.asm"
 %include "src/serial.asm"
 %include "src/keyboard.asm"
+%include "src/acpi.asm"
 %include "src/shell.asm"
 
 titlebar_text db 'AstralOS - 0.1.0 - pekeshi', 0

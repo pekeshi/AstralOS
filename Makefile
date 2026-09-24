@@ -19,7 +19,7 @@ $(BOOT): src/boot.asm
 	@if not exist "$(BUILD)" mkdir "$(BUILD)"
 	$(NASM) -f bin -o $@ $<
 
-$(KERNEL): src/kernel.asm src/vga.asm src/serial.asm src/keyboard.asm src/shell.asm
+$(KERNEL): src/kernel.asm src/vga.asm src/serial.asm src/keyboard.asm src/acpi.asm src/shell.asm
 	@if not exist "$(BUILD)" mkdir "$(BUILD)"
 	$(NASM) -f bin -o $@ $<
 
