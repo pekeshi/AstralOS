@@ -10,7 +10,7 @@ system or interactive shell.
 ## Current Features
 
 - 16-bit BIOS bootloader
-- Kernel loading from a floppy-style disk image
+- Kernel loading from a BIOS disk image using INT 13h extensions, with CHS fallback
 - 32-bit protected-mode transition using a GDT
 - COM1 serial output for debugging
 - 80x25 VGA text output
@@ -48,7 +48,7 @@ The build creates:
 
 - `build/boot.bin` - the 512-byte boot sector
 - `build/kernel.bin` - the raw kernel binary
-- `build/astralos.img` - the floppy-style disk image
+- `build/astralos.img` - a 1.44 MiB BIOS-bootable disk image
 
 ## Run
 
@@ -71,8 +71,15 @@ The serial output should include:
 ```text
 Loading AstralOS kernel...
 Kernel loaded. Switching to protected mode...
-Kernel entered protected mode
+Welcome to AstralOS, type help to get a list of the commands.
 ```
+
+## Real hardware
+
+Write `build/astralos.img` to a USB drive as a raw disk image using a tool such
+as Rufus or balenaEtcher. Select legacy BIOS/CSM boot mode in the firmware boot
+menu. This image uses a BIOS boot sector and is not a UEFI application, so it
+will not boot on systems configured for UEFI-only mode.
 
 ## Roadmap
 

@@ -10,8 +10,15 @@ BUILD := build
 BOOT := $(BUILD)/boot.bin
 KERNEL := $(BUILD)/kernel.bin
 IMAGE := $(BUILD)/astralos.img
+UEFI_KERNEL := $(BUILD)/kernel-uefi.bin
+UEFI_OBJ := $(BUILD)/uefi.obj
+UEFI_APP := $(BUILD)/BOOTX64.EFI
+UEFI_IMAGE := $(BUILD)/astralos-uefi.img
+DISK_SIZE := 1474560
+DISK_PADDING := 1465856
+WSL_ROOT := $(shell wsl.exe wslpath -a "$(CURDIR)")
 
-.PHONY: all run run-test clean
+.PHONY: all uefi run run-test run-uefi clean
 
 all: $(IMAGE)
 
@@ -23,15 +30,37 @@ $(KERNEL): src/kernel.asm src/vga.asm src/serial.asm src/keyboard.asm src/acpi.a
 	@if not exist "$(BUILD)" mkdir "$(BUILD)"
 	$(NASM) -f bin -o $@ $<
 
+$(UEFI_KERNEL): src/kernel.asm src/vga.asm src/serial.asm src/keyboard.asm src/acpi.asm src/shell.asm
+	@if not exist "$(BUILD)" mkdir "$(BUILD)"
+	$(NASM) -f bin -dKERNEL_ORG=0x100000 -o $@ $<
+
+$(UEFI_OBJ): src/uefi.asm
+	@if not exist "$(BUILD)" mkdir "$(BUILD)"
+	$(NASM) -f win64 -o $@ $<
+
+$(UEFI_APP): $(UEFI_OBJ)
+	wsl.exe ld -mi386pep --subsystem 10 --entry efi_main --image-base 0x400000 -o "$(WSL_ROOT)/$(UEFI_APP)" "$(WSL_ROOT)/$(UEFI_OBJ)"
+
+uefi: $(UEFI_IMAGE)
+
+$(UEFI_IMAGE): $(UEFI_APP) $(UEFI_KERNEL) tools/make_uefi_image.py
+	python tools/make_uefi_image.py "$@" "$(UEFI_APP)" "$(UEFI_KERNEL)"
+
 $(IMAGE): $(BOOT) $(KERNEL)
 	@if exist "$@" del /q "$@"
-	copy /b build\boot.bin+build\kernel.bin build\astralos.img
+	@if exist "$(BUILD)\padding.bin" del /q "$(BUILD)\padding.bin"
+	fsutil file createnew "$(BUILD)\padding.bin" $(DISK_PADDING)
+	copy /b build\boot.bin+build\kernel.bin+build\padding.bin "$@"
+	@if not "$(DISK_SIZE)"=="" fsutil file seteof "$@" $(DISK_SIZE)
 
 run: $(IMAGE)
 	$(QEMU) -fda $<
 
 run-test: $(IMAGE)
 	$(QEMU) -display none -serial stdio -fda $<
+
+run-uefi: $(UEFI_IMAGE)
+	qemu-system-x86_64 -drive format=raw,file=$< -bios "C:/msys64/mingw64/share/qemu/edk2-x86_64-code.fd" -serial stdio
 
 clean:
 	@if exist "$(BUILD)" rmdir /s /q "$(BUILD)"

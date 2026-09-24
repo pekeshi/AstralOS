@@ -1,4 +1,8 @@
-[org 0x1000]
+%ifndef KERNEL_ORG
+%define KERNEL_ORG 0x1000
+%endif
+
+[org KERNEL_ORG]
 bits 32
 
 start:
