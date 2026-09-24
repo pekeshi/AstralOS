@@ -4,12 +4,14 @@ import struct
 import sys
 
 SECTOR_SIZE = 512
-TOTAL_SECTORS = 2880
+TOTAL_SECTORS = 32768
+FS_OFFSET = SECTOR_SIZE
+FS_SECTORS = TOTAL_SECTORS - 1
 RESERVED_SECTORS = 1
 FAT_COUNT = 2
-SECTORS_PER_FAT = 9
-ROOT_ENTRIES = 224
-ROOT_SECTORS = 14
+SECTORS_PER_FAT = 128
+ROOT_ENTRIES = 512
+ROOT_SECTORS = 32
 DATA_START = RESERVED_SECTORS + FAT_COUNT * SECTORS_PER_FAT + ROOT_SECTORS
 CLUSTER_SIZE = SECTOR_SIZE
 
@@ -44,21 +46,27 @@ def main():
     struct.pack_into("<H", boot, 14, RESERVED_SECTORS)
     boot[16] = FAT_COUNT
     struct.pack_into("<H", boot, 17, ROOT_ENTRIES)
-    struct.pack_into("<H", boot, 19, TOTAL_SECTORS)
-    boot[21] = 0xF0
+    struct.pack_into("<H", boot, 19, FS_SECTORS)
+    boot[21] = 0xF8
     struct.pack_into("<H", boot, 22, SECTORS_PER_FAT)
     struct.pack_into("<H", boot, 24, 18)
     struct.pack_into("<H", boot, 26, 2)
+    struct.pack_into("<I", boot, 28, 1)
     boot[36] = 0
     boot[38] = 0x29
     struct.pack_into("<I", boot, 39, 0x20260924)
     boot[43:54] = b"ASTRALOS   "
-    boot[54:62] = b"FAT12   "
+    boot[54:62] = b"FAT16   "
     boot[510:512] = b"\x55\xaa"
-    image[0:SECTOR_SIZE] = boot
+    mbr = bytearray(SECTOR_SIZE)
+    mbr[446:462] = struct.pack("<B3sB3sII", 0x80, b"\x01\x01\x00", 0x06,
+                                b"\xfe\xff\xff", 1, FS_SECTORS)
+    mbr[510:512] = b"\x55\xaa"
+    image[0:SECTOR_SIZE] = mbr
+    image[FS_OFFSET:FS_OFFSET + SECTOR_SIZE] = boot
 
     fat = bytearray(SECTORS_PER_FAT * SECTOR_SIZE)
-    fat[0:3] = b"\xf0\xff\xff"
+    fat[0:4] = b"\xf8\xff\xff\xff"
     next_cluster = 2
     chains = {}
 
@@ -102,32 +110,26 @@ def main():
         chains[cluster] = ([cluster], data)
 
     def set_fat(cluster, value):
-        offset = cluster + cluster // 2
-        if cluster & 1:
-            fat[offset] = (fat[offset] & 0x0F) | ((value << 4) & 0xF0)
-            fat[offset + 1] = (value >> 4) & 0xFF
-        else:
-            fat[offset] = value & 0xFF
-            fat[offset + 1] = (fat[offset + 1] & 0xF0) | ((value >> 8) & 0x0F)
+        struct.pack_into("<H", fat, cluster * 2, value)
 
     for clusters, data in chains.values():
         for index, cluster in enumerate(clusters):
             set_fat(cluster, clusters[index + 1] if index + 1 < len(clusters) else 0xFFF)
-            start = (DATA_START + cluster - 2) * SECTOR_SIZE
+            start = FS_OFFSET + (DATA_START + cluster - 2) * SECTOR_SIZE
             chunk = data[index * CLUSTER_SIZE:(index + 1) * CLUSTER_SIZE]
             image[start:start + len(chunk)] = chunk
 
-    fat_start = RESERVED_SECTORS * SECTOR_SIZE
+    fat_start = FS_OFFSET + RESERVED_SECTORS * SECTOR_SIZE
     for copy_index in range(FAT_COUNT):
         start = fat_start + copy_index * len(fat)
         image[start:start + len(fat)] = fat
-    root_start = (RESERVED_SECTORS + FAT_COUNT * SECTORS_PER_FAT) * SECTOR_SIZE
+    root_start = FS_OFFSET + (RESERVED_SECTORS + FAT_COUNT * SECTORS_PER_FAT) * SECTOR_SIZE
     image[root_start:root_start + len(root)] = root
 
     with open(image_path, "wb") as output:
-        output.write(image)
+        output.write(image[:TOTAL_SECTORS * SECTOR_SIZE])
 
-    print(f"created {image_path} ({len(image)} bytes, EFI {len(efi)} bytes, kernel {len(kernel)} bytes)")
+    print(f"created {image_path} ({TOTAL_SECTORS * SECTOR_SIZE} bytes, EFI {len(efi)} bytes, kernel {len(kernel)} bytes)")
 
 
 if __name__ == "__main__":
